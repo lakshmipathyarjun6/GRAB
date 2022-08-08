@@ -76,14 +76,24 @@ def export_sequence(cfg, logger=None):
     verts_obj = to_cpu(obj_m(**obj_parms).vertices)
     contacts_obj = seq_data['contact']['object']
 
+    num_hand_faces = rh_f.shape[0]
+    num_hand_vertices = verts_rh.shape[1]
+
+    num_object_faces = obj_f.shape[0]
+    num_object_vertices = verts_obj.shape[1]
+
     dumpData = {
         'numFrames': T,
-        'handFaces': rh_f,
-        'handVertices': verts_rh,
-        'handContacts': contacts_rh,
-        'objectFaces': obj_f,
-        'objectVertices': verts_obj,
-        'objectContacts': contacts_obj
+        'numHandFaces': num_hand_faces,
+        'numHandVertices': num_hand_vertices,
+        'handFaces': rh_f.flatten(),
+        'handVertices': verts_rh.flatten(),
+        'handContacts': contacts_rh.flatten(),
+        'numObjectFaces': num_object_faces,
+        'numObjectVertices': num_object_vertices,
+        'objectFaces': obj_f.flatten(),
+        'objectVertices': verts_obj.flatten(),
+        'objectContacts': contacts_obj.flatten()
     }
 
     np.savez_compressed(outfname, **dumpData)
