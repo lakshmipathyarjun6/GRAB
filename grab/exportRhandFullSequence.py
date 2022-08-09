@@ -4,9 +4,11 @@ sys.path.append('..')
 
 import argparse
 import io
+import json
 import numpy as np
 import os
 import smplx
+import trimesh
 
 from tools.cfg_parser import Config
 from tools.meshviewer import Mesh
@@ -23,8 +25,6 @@ def export_sequence(cfg, logger=None):
     rhand_smplx_correspondence_fn = cfg.mano_correspondence
     makepath(out_path)
 
-    rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
-
     if logger is None:
         logger = makelogger(log_dir=os.path.join(out_path, 'grab_preprocessing.log'), mode='a').info
     else:
@@ -36,7 +36,10 @@ def export_sequence(cfg, logger=None):
     if out_path is None:
         out_path = grab_path
 
-    outfname = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export.npz'), isfile=True)
+    outfnamehandmesh = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_handmesh.obj'), isfile=True)
+    outfnameobjectmesh = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_objectmesh.obj'), isfile=True)
+    outfnamemotion = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_motion.npz'), isfile=True)
+    outfnamecontacts = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_contacts.json'), isfile=True)
 
     seq_data = parse_npz(motion_path)
     n_comps = seq_data['n_comps']
@@ -61,7 +64,10 @@ def export_sequence(cfg, logger=None):
     rh_parms = params2torch(seq_data.rhand.params)
     rh_output = rh_m(**rh_parms)
     verts_rh = to_cpu(rh_output.vertices)
-    contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
+
+    # Do not need hand contacts, but can include if needed
+    # rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
+    # contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
 
     obj_mesh_fn = os.path.join(grab_path, '..', seq_data.object.object_mesh)
     obj_mesh = Mesh(filename=obj_mesh_fn)
@@ -74,6 +80,8 @@ def export_sequence(cfg, logger=None):
 
     obj_parms = params2torch(seq_data.object.params)
     verts_obj = to_cpu(obj_m(**obj_parms).vertices)
+    rot_obj = to_cpu(obj_m(**obj_parms).global_orient)
+    trans_obj = to_cpu(obj_m(**obj_parms).transl)
     contacts_obj = seq_data['contact']['object']
 
     num_hand_faces = rh_f.shape[0]
@@ -81,22 +89,49 @@ def export_sequence(cfg, logger=None):
 
     num_object_faces = obj_f.shape[0]
     num_object_vertices = verts_obj.shape[1]
+    verts_obj = verts_obj[0] # use tranlation and rotation for the rest to save space
 
-    dumpData = {
+    hand_trimesh = trimesh.Trimesh(vertices=verts_rh[0], faces=rh_f)
+    hand_trimesh.export(outfnamehandmesh)
+
+    obj_trimesh = trimesh.Trimesh(vertices=obj_vtemp, faces=obj_f)
+    obj_trimesh.export(outfnameobjectmesh)
+
+    contacts_obj_sparse = {}
+
+    for i in range(T):
+        contacts_obj_frame = contacts_obj[i]
+
+        no_obj_contact = np.all((contacts_obj_frame == 0))
+        contacts = {}
+
+        if not no_obj_contact:
+            contact_vertex_locations = np.where(contacts_obj_frame != 0)[0]
+            contact_vertex_values = contacts_obj_frame[contact_vertex_locations]
+
+            num_contacts = len(contact_vertex_locations)
+
+            for j in range(num_contacts):
+                contact_location = contact_vertex_locations[j]
+                contact_value = contact_vertex_values[j]
+
+                contacts[str(contact_location)] = int(contact_value)
+
+        if contacts:
+            contacts_obj_sparse[str(i)] = contacts
+
+    dumpMotion = {
         'numFrames': T,
-        'numHandFaces': num_hand_faces,
-        'numHandVertices': num_hand_vertices,
-        'handFaces': rh_f.flatten(),
         'handVertices': verts_rh.flatten(),
-        'handContacts': contacts_rh.flatten(),
-        'numObjectFaces': num_object_faces,
-        'numObjectVertices': num_object_vertices,
-        'objectFaces': obj_f.flatten(),
-        'objectVertices': verts_obj.flatten(),
-        'objectContacts': contacts_obj.flatten()
+        'objectRotations': rot_obj.flatten(),
+        'objectTranslations': trans_obj.flatten()
     }
 
-    np.savez_compressed(outfname, **dumpData)
+    np.savez_compressed(outfnamemotion, **dumpMotion)
+
+    with open(outfnamecontacts, "w") as f:
+        json.dump(contacts_obj_sparse, f, indent=4)
+
 
 
 if __name__ == '__main__':
