@@ -4,7 +4,6 @@ sys.path.append('..')
 
 import argparse
 import io
-import json
 import numpy as np
 import os
 import smplx
@@ -97,41 +96,39 @@ def export_sequence(cfg, logger=None):
     obj_trimesh = trimesh.Trimesh(vertices=obj_vtemp, faces=obj_f)
     obj_trimesh.export(outfnameobjectmesh)
 
-    contacts_obj_sparse = {}
+    # Use sparse representation for contacts
+    contact_frames = np.array([], dtype=np.uint16)
+    contact_frame_counts = np.array([], dtype=np.uint16)
+    contact_locations = np.array([], dtype=np.uint32)
+    contact_values = np.array([], dtype=np.uint8)
 
-    for i in range(T):
-        contacts_obj_frame = contacts_obj[i]
+    for frame in range(T):
+        contacts_obj_frame = contacts_obj[frame]
 
         no_obj_contact = np.all((contacts_obj_frame == 0))
-        contacts = {}
 
         if not no_obj_contact:
-            contact_vertex_locations = np.where(contacts_obj_frame != 0)[0]
-            contact_vertex_values = contacts_obj_frame[contact_vertex_locations]
+            contact_frames = np.append(contact_frames, np.array([frame], dtype=np.uint16))
 
-            num_contacts = len(contact_vertex_locations)
+            contact_frame_vertex_locations =  np.array(np.where(contacts_obj_frame != 0)[0], dtype=np.uint32)
+            contact_frame_vertex_values = np.array(contacts_obj_frame[contact_frame_vertex_locations],  dtype=np.uint8)
 
-            for j in range(num_contacts):
-                contact_location = contact_vertex_locations[j]
-                contact_value = contact_vertex_values[j]
-
-                contacts[str(contact_location)] = int(contact_value)
-
-        if contacts:
-            contacts_obj_sparse[str(i)] = contacts
+            contact_frame_counts = np.append(contact_frame_counts, np.array([len(contact_frame_vertex_locations)], dtype=np.uint16))
+            contact_locations = np.append(contact_locations, contact_frame_vertex_locations)
+            contact_values = np.append(contact_values, contact_frame_vertex_values)
 
     dumpMotion = {
         'numFrames': T,
         'handVertices': verts_rh.flatten(),
         'objectRotations': rot_obj.flatten(),
-        'objectTranslations': trans_obj.flatten()
+        'objectTranslations': trans_obj.flatten(),
+        'objectContactFrames': contact_frames.flatten(),
+        'objectContactFrameCounts': contact_frame_counts.flatten(),
+        'objectContactLocations': contact_locations.flatten(),
+        'objectContactValues': contact_values.flatten()
     }
 
     np.savez_compressed(outfnamemotion, **dumpMotion)
-
-    with open(outfnamecontacts, "w") as f:
-        json.dump(contacts_obj_sparse, f, indent=4)
-
 
 
 if __name__ == '__main__':
