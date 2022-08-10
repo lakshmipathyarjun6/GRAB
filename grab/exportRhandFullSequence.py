@@ -91,7 +91,7 @@ def export_sequence(cfg, logger=None):
     num_object_vertices = verts_obj.shape[1]
     verts_obj = verts_obj[0] # use tranlation and rotation for the rest to save space
 
-    hand_trimesh = trimesh.Trimesh(vertices=verts_rh[0], faces=rh_f)
+    hand_trimesh = trimesh.Trimesh(vertices=rh_vtemp, faces=rh_f)
     hand_trimesh.export(outfnamehandmesh)
 
     obj_trimesh = trimesh.Trimesh(vertices=obj_vtemp, faces=obj_f)
