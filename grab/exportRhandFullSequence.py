@@ -63,6 +63,7 @@ def export_sequence(cfg, logger=None):
     rh_parms = params2torch(seq_data.rhand.params)
     rh_output = rh_m(**rh_parms)
     verts_rh = to_cpu(rh_output.vertices)
+    joints_rh = to_cpu(rh_output.joints)
 
     rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
     contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
@@ -144,6 +145,7 @@ def export_sequence(cfg, logger=None):
         dumpMotion = {
             'numFrames': T,
             'handVertices': verts_rh.flatten(),
+            'handJoints': joints_rh.flatten(),
             'objectRotations': rot_obj.flatten(),
             'objectTranslations': trans_obj.flatten(),
             'contactFrames': contact_frames.flatten(),
