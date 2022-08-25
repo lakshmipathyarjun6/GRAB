@@ -65,7 +65,7 @@ def export_sequence(cfg, logger=None):
     verts_rh = to_cpu(rh_output.vertices)
     joints_rh = to_cpu(rh_output.joints)
 
-    joints_hierarchy = np.array([-1, 0, 1, 2, 0, 4, 5, 0, 7, 8, 0, 10, 11, 0, 13, 14])
+    joints_hierarchy = np.array([255, 0, 1, 2, 0, 4, 5, 0, 7, 8, 0, 10, 11, 0, 13, 14], dtype=np.uint8)
     num_joints = len(joints_hierarchy)
 
     # Convert all joint offsets to relative based on hierarchy
@@ -76,7 +76,7 @@ def export_sequence(cfg, logger=None):
         for ji in range(num_joints):
             parent_index = joints_hierarchy[ji]
 
-            if parent_index == -1:
+            if parent_index == 255:
                 relative_frame[ji] = joints_frame[ji]
             else:
                 relative_frame[ji] = joints_frame[ji] - joints_frame[parent_index]
