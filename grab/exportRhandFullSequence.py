@@ -65,6 +65,24 @@ def export_sequence(cfg, logger=None):
     verts_rh = to_cpu(rh_output.vertices)
     joints_rh = to_cpu(rh_output.joints)
 
+    joints_hierarchy = np.array([-1, 0, 1, 2, 0, 4, 5, 0, 7, 8, 0, 10, 11, 0, 13, 14])
+    num_joints = len(joints_hierarchy)
+
+    # Convert all joint offsets to relative based on hierarchy
+    for frame in range(T):
+        joints_frame = joints_rh[frame]
+        relative_frame = np.zeros(joints_frame.shape, dtype=joints_frame.dtype)
+
+        for ji in range(num_joints):
+            parent_index = joints_hierarchy[ji]
+
+            if parent_index == -1:
+                relative_frame[ji] = joints_frame[ji]
+            else:
+                relative_frame[ji] = joints_frame[ji] - joints_frame[parent_index]
+
+        joints_rh[frame] = relative_frame
+
     rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
     contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
 
@@ -145,6 +163,7 @@ def export_sequence(cfg, logger=None):
         dumpMotion = {
             'numFrames': T,
             'handVertices': verts_rh.flatten(),
+            'handJointHierarchy': joints_hierarchy.flatten(),
             'handJoints': joints_rh.flatten(),
             'objectRotations': rot_obj.flatten(),
             'objectTranslations': trans_obj.flatten(),
