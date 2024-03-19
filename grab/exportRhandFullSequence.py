@@ -101,6 +101,19 @@ def export_sequence(cfg, logger=None):
     trans_obj = to_cpu(obj_m(**obj_parms).transl)
     contacts_obj = seq_data['contact']['object']
 
+    table_mesh_fn = os.path.join(grab_path, '..', seq_data.table.table_mesh)
+    table_mesh = Mesh(filename=table_mesh_fn)
+
+    table_f = table_mesh.faces
+    table_vtemp = table_mesh.vertices
+
+    table_m = ObjectModel(v_template=obj_vtemp,
+                    batch_size=T)
+
+    table_parms = params2torch(seq_data.table.params)
+    rot_table = to_cpu(table_m(**table_parms).global_orient)
+    trans_table = to_cpu(table_m(**table_parms).transl)
+
     num_hand_faces = rh_f.shape[0]
     num_hand_vertices = verts_rh.shape[1]
 
@@ -167,6 +180,8 @@ def export_sequence(cfg, logger=None):
             'handJoints': joints_rh.flatten(),
             'objectRotations': rot_obj.flatten(),
             'objectTranslations': trans_obj.flatten(),
+            'tableRotations': rot_table.flatten(),
+            'tableTranslations': trans_table.flatten(),
             'contactFrames': contact_frames.flatten(),
             'objectContactFrameCounts': object_contact_frame_counts.flatten(),
             'objectContactLocations': object_contact_locations.flatten(),
