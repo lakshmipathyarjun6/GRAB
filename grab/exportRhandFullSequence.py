@@ -52,6 +52,32 @@ def export_sequence(cfg, logger=None):
     rh_f = rh_mesh.faces
     rh_vtemp = rh_mesh.vertices
 
+    # Add one extra frame for all starting rest poses
+
+    rest_hand_global_orient = np.zeros(seq_data.rhand.params.global_orient.shape[1], dtype=np.float32)
+    rest_hand_transl = np.zeros(seq_data.rhand.params.transl.shape[1], dtype=np.float32)
+    rest_hand_pose = np.zeros(seq_data.rhand.params.hand_pose.shape[1], dtype=np.float32)
+    rest_hand_fullpose = np.zeros(seq_data.rhand.params.fullpose.shape[1], dtype=np.float32)
+
+    rest_object_global_orient = np.zeros(seq_data.object.params.global_orient.shape[1], dtype=np.float32)
+    rest_object_transl = np.zeros(seq_data.object.params.transl.shape[1], dtype=np.float32)
+
+    rest_table_global_orient = np.zeros(seq_data.table.params.global_orient.shape[1], dtype=np.float32)
+    rest_table_transl = np.zeros(seq_data.table.params.transl.shape[1], dtype=np.float32)
+
+    seq_data.rhand.params.global_orient = np.vstack((rest_hand_global_orient, seq_data.rhand.params.global_orient))
+    seq_data.rhand.params.transl = np.vstack((rest_hand_transl, seq_data.rhand.params.transl))
+    seq_data.rhand.params.hand_pose = np.vstack((rest_hand_pose, seq_data.rhand.params.hand_pose))
+    seq_data.rhand.params.fullpose = np.vstack((rest_hand_fullpose, seq_data.rhand.params.fullpose))
+
+    seq_data.object.params.global_orient = np.vstack((rest_object_global_orient, seq_data.object.params.global_orient))
+    seq_data.object.params.transl = np.vstack((rest_object_transl, seq_data.object.params.transl))
+
+    seq_data.table.params.global_orient = np.vstack((rest_table_global_orient, seq_data.table.params.global_orient))
+    seq_data.table.params.transl = np.vstack((rest_table_transl, seq_data.table.params.transl))
+
+    T += 1
+
     rh_m = smplx.create(model_path=cfg.model_path,
                     model_type='mano',
                     is_rhand = True,
@@ -63,14 +89,15 @@ def export_sequence(cfg, logger=None):
     rh_parms = params2torch(seq_data.rhand.params)
     rh_output = rh_m(**rh_parms)
     verts_rh = to_cpu(rh_output.vertices)
-    joints_rh = to_cpu(rh_output.joints)
+    joints_rh_positions = to_cpu(rh_output.joints)
+    joints_rh_orientations = seq_data.rhand.params.fullpose
 
     joints_hierarchy = np.array([255, 0, 1, 2, 0, 4, 5, 0, 7, 8, 0, 10, 11, 0, 13, 14], dtype=np.uint8)
     num_joints = len(joints_hierarchy)
 
     # Convert all joint offsets to relative based on hierarchy
     for frame in range(T):
-        joints_frame = joints_rh[frame]
+        joints_frame = joints_rh_positions[frame]
         relative_frame = np.zeros(joints_frame.shape, dtype=joints_frame.dtype)
 
         for ji in range(num_joints):
@@ -81,10 +108,12 @@ def export_sequence(cfg, logger=None):
             else:
                 relative_frame[ji] = joints_frame[ji] - joints_frame[parent_index]
 
-        joints_rh[frame] = relative_frame
+        joints_rh_positions[frame] = relative_frame
 
     rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
     contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
+
+    contacts_rh = np.vstack((np.zeros(contacts_rh.shape[1]), contacts_rh))
 
     obj_mesh_fn = os.path.join(grab_path, '..', seq_data.object.object_mesh)
     obj_mesh = Mesh(filename=obj_mesh_fn)
@@ -100,6 +129,8 @@ def export_sequence(cfg, logger=None):
     rot_obj = to_cpu(obj_m(**obj_parms).global_orient)
     trans_obj = to_cpu(obj_m(**obj_parms).transl)
     contacts_obj = seq_data['contact']['object']
+
+    contacts_obj = np.vstack((np.zeros(contacts_obj.shape[1]), contacts_obj))
 
     table_mesh_fn = os.path.join(grab_path, '..', seq_data.table.table_mesh)
     table_mesh = Mesh(filename=table_mesh_fn)
@@ -177,7 +208,8 @@ def export_sequence(cfg, logger=None):
             'numFrames': T,
             'handVertices': verts_rh.flatten(),
             'handJointHierarchy': joints_hierarchy.flatten(),
-            'handJoints': joints_rh.flatten(),
+            'handJoints': joints_rh_positions.flatten(),
+            'handJointOrientations': joints_rh_orientations.flatten(),
             'objectRotations': rot_obj.flatten(),
             'objectTranslations': trans_obj.flatten(),
             'tableRotations': rot_table.flatten(),
