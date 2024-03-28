@@ -52,31 +52,19 @@ def export_sequence(cfg, logger=None):
     rh_f = rh_mesh.faces
     rh_vtemp = rh_mesh.vertices
 
-    # Add one extra frame for all starting rest poses
+    # Extract hand joint rest position
 
-    rest_hand_global_orient = np.zeros(seq_data.rhand.params.global_orient.shape[1], dtype=np.float32)
-    rest_hand_transl = np.zeros(seq_data.rhand.params.transl.shape[1], dtype=np.float32)
-    rest_hand_pose = np.zeros(seq_data.rhand.params.hand_pose.shape[1], dtype=np.float32)
-    rest_hand_fullpose = np.zeros(seq_data.rhand.params.fullpose.shape[1], dtype=np.float32)
+    rest_hand_global_orient = np.zeros((1, seq_data.rhand.params.global_orient.shape[1]))
+    rest_hand_transl = np.zeros((1, seq_data.rhand.params.transl.shape[1]))
+    rest_hand_pose = np.zeros((1, seq_data.rhand.params.hand_pose.shape[1]))
+    rest_hand_fullpose = np.zeros((1, seq_data.rhand.params.fullpose.shape[1]))
 
-    rest_object_global_orient = np.zeros(seq_data.object.params.global_orient.shape[1], dtype=np.float32)
-    rest_object_transl = np.zeros(seq_data.object.params.transl.shape[1], dtype=np.float32)
-
-    rest_table_global_orient = np.zeros(seq_data.table.params.global_orient.shape[1], dtype=np.float32)
-    rest_table_transl = np.zeros(seq_data.table.params.transl.shape[1], dtype=np.float32)
-
-    seq_data.rhand.params.global_orient = np.vstack((rest_hand_global_orient, seq_data.rhand.params.global_orient))
-    seq_data.rhand.params.transl = np.vstack((rest_hand_transl, seq_data.rhand.params.transl))
-    seq_data.rhand.params.hand_pose = np.vstack((rest_hand_pose, seq_data.rhand.params.hand_pose))
-    seq_data.rhand.params.fullpose = np.vstack((rest_hand_fullpose, seq_data.rhand.params.fullpose))
-
-    seq_data.object.params.global_orient = np.vstack((rest_object_global_orient, seq_data.object.params.global_orient))
-    seq_data.object.params.transl = np.vstack((rest_object_transl, seq_data.object.params.transl))
-
-    seq_data.table.params.global_orient = np.vstack((rest_table_global_orient, seq_data.table.params.global_orient))
-    seq_data.table.params.transl = np.vstack((rest_table_transl, seq_data.table.params.transl))
-
-    T += 1
+    rest_params = {
+        'global_orient': rest_hand_global_orient,
+        'transl': rest_hand_transl,
+        'hand_pose': rest_hand_pose,
+        'fullpose': rest_hand_fullpose
+    }
 
     rh_m = smplx.create(model_path=cfg.model_path,
                     model_type='mano',
@@ -90,10 +78,38 @@ def export_sequence(cfg, logger=None):
     rh_output = rh_m(**rh_parms)
     verts_rh = to_cpu(rh_output.vertices)
     joints_rh_positions = to_cpu(rh_output.joints)
+
+    rh_root_global_orientations = seq_data.rhand.params.global_orient
+    rh_root_translations = seq_data.rhand.params.transl
     joints_rh_orientations = seq_data.rhand.params.fullpose
+
+    rh_m_rest = smplx.create(model_path=cfg.model_path,
+                model_type='mano',
+                is_rhand = True,
+                v_template = rh_vtemp,
+                num_pca_comps=n_comps,
+                flat_hand_mean=True,
+                batch_size=1)
+
+    rh_rest_params = params2torch(rest_params)
+    rh_rest_output = rh_m_rest(**rh_rest_params)
+    joints_rh_rest_positions = to_cpu(rh_rest_output.joints)
+    joints_rh_rest_positions = joints_rh_rest_positions[0]
+
+    # Recorded translations are relative....in the opposite direction?
+    rh_root_translations += joints_rh_rest_positions[0]
 
     joints_hierarchy = np.array([255, 0, 1, 2, 0, 4, 5, 0, 7, 8, 0, 10, 11, 0, 13, 14], dtype=np.uint8)
     num_joints = len(joints_hierarchy)
+
+    rh_relative_rest_configuration = np.zeros(joints_rh_rest_positions.shape, dtype=joints_rh_rest_positions.dtype)
+    for ji in range(num_joints):
+        parent_index = joints_hierarchy[ji]
+
+        if parent_index == 255:
+            rh_relative_rest_configuration[ji] = joints_rh_rest_positions[ji]
+        else:
+            rh_relative_rest_configuration[ji] = joints_rh_rest_positions[ji] - joints_rh_rest_positions[parent_index]
 
     # Convert all joint offsets to relative based on hierarchy
     for frame in range(T):
@@ -113,8 +129,6 @@ def export_sequence(cfg, logger=None):
     rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
     contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
 
-    contacts_rh = np.vstack((np.zeros(contacts_rh.shape[1]), contacts_rh))
-
     obj_mesh_fn = os.path.join(grab_path, '..', seq_data.object.object_mesh)
     obj_mesh = Mesh(filename=obj_mesh_fn)
 
@@ -129,8 +143,6 @@ def export_sequence(cfg, logger=None):
     rot_obj = to_cpu(obj_m(**obj_parms).global_orient)
     trans_obj = to_cpu(obj_m(**obj_parms).transl)
     contacts_obj = seq_data['contact']['object']
-
-    contacts_obj = np.vstack((np.zeros(contacts_obj.shape[1]), contacts_obj))
 
     table_mesh_fn = os.path.join(grab_path, '..', seq_data.table.table_mesh)
     table_mesh = Mesh(filename=table_mesh_fn)
@@ -209,7 +221,10 @@ def export_sequence(cfg, logger=None):
             'handVertices': verts_rh.flatten(),
             'handJointHierarchy': joints_hierarchy.flatten(),
             'handJoints': joints_rh_positions.flatten(),
+            'handRootOrientations': rh_root_global_orientations.flatten(),
+            'handRootTranslations': rh_root_translations.flatten(),
             'handJointOrientations': joints_rh_orientations.flatten(),
+            'handJointsRestConfiguration': rh_relative_rest_configuration.flatten(),
             'objectRotations': rot_obj.flatten(),
             'objectTranslations': trans_obj.flatten(),
             'tableRotations': rot_table.flatten(),
