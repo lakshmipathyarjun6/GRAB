@@ -77,7 +77,6 @@ def export_sequence(cfg, logger=None):
     rh_parms = params2torch(seq_data.rhand.params)
     rh_output = rh_m(**rh_parms)
     verts_rh = to_cpu(rh_output.vertices)
-    joints_rh_positions = to_cpu(rh_output.joints)
 
     rh_root_global_orientations = seq_data.rhand.params.global_orient
     rh_root_translations = seq_data.rhand.params.transl
@@ -110,21 +109,6 @@ def export_sequence(cfg, logger=None):
             rh_relative_rest_configuration[ji] = joints_rh_rest_positions[ji]
         else:
             rh_relative_rest_configuration[ji] = joints_rh_rest_positions[ji] - joints_rh_rest_positions[parent_index]
-
-    # Convert all joint offsets to relative based on hierarchy
-    for frame in range(T):
-        joints_frame = joints_rh_positions[frame]
-        relative_frame = np.zeros(joints_frame.shape, dtype=joints_frame.dtype)
-
-        for ji in range(num_joints):
-            parent_index = joints_hierarchy[ji]
-
-            if parent_index == 255:
-                relative_frame[ji] = joints_frame[ji]
-            else:
-                relative_frame[ji] = joints_frame[ji] - joints_frame[parent_index]
-
-        joints_rh_positions[frame] = relative_frame
 
     rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
     contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
@@ -220,7 +204,6 @@ def export_sequence(cfg, logger=None):
             'numFrames': T,
             'handVertices': verts_rh.flatten(),
             'handJointHierarchy': joints_hierarchy.flatten(),
-            'handJoints': joints_rh_positions.flatten(),
             'handRootOrientations': rh_root_global_orientations.flatten(),
             'handRootTranslations': rh_root_translations.flatten(),
             'handJointOrientations': joints_rh_orientations.flatten(),
