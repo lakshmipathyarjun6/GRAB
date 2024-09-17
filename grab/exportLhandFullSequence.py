@@ -36,8 +36,7 @@ def export_sequence(cfg, logger=None):
 
     outfnamehandmesh = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_handmesh.obj'), isfile=True)
     outfnameobjectmesh = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_objectmesh.obj'), isfile=True)
-    outfnamemotion = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_motion.npz'), isfile=True)
-    outfnamecontacts = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_contacts.json'), isfile=True)
+    outfnamemotion = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_left_full_export_motion.npz'), isfile=True)
 
     seq_data = parse_npz(motion_path)
     n_comps = seq_data['n_comps']
@@ -193,7 +192,7 @@ def export_sequence(cfg, logger=None):
             'objectContactValues': object_contact_values.flatten()
         }
 
-        np.savez_compressed(outfnamemotion, **dumpMotion)
+        np.savez(outfnamemotion, **dumpMotion)
         print("Export Completed Successfully")
     else:
         print("Sequence is invalid - failed to export")
