@@ -21,7 +21,6 @@ def export_sequence(cfg, logger=None):
 
     grab_path = cfg.grab_path
     out_path = cfg.out_path
-    rhand_smplx_correspondence_fn = cfg.mano_correspondence
     makepath(out_path)
 
     if logger is None:
@@ -37,8 +36,7 @@ def export_sequence(cfg, logger=None):
 
     outfnamehandmesh = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_handmesh.obj'), isfile=True)
     outfnameobjectmesh = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_objectmesh.obj'), isfile=True)
-    outfnamemotion = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_motion.npz'), isfile=True)
-    outfnamecontacts = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_full_export_contacts.json'), isfile=True)
+    outfnamemotion = makepath(motion_path.replace(grab_path,out_path).replace('.npz', '_right_full_export_motion.npz'), isfile=True)
 
     seq_data = parse_npz(motion_path)
     n_comps = seq_data['n_comps']
@@ -110,9 +108,6 @@ def export_sequence(cfg, logger=None):
         else:
             rh_relative_rest_configuration[ji] = joints_rh_rest_positions[ji] - joints_rh_rest_positions[parent_index]
 
-    rhand_smplx_correspondence_ids = np.load(rhand_smplx_correspondence_fn)
-    contacts_rh = seq_data['contact']['body'][:,rhand_smplx_correspondence_ids]
-
     obj_mesh_fn = os.path.join(grab_path, '..', seq_data.object.object_mesh)
     obj_mesh = Mesh(filename=obj_mesh_fn)
 
@@ -161,43 +156,22 @@ def export_sequence(cfg, logger=None):
     object_contact_locations = np.array([], dtype=np.uint32)
     object_contact_values = np.array([], dtype=np.uint8)
 
-    hand_contact_frame_counts = np.array([], dtype=np.uint16)
-    hand_contact_locations = np.array([], dtype=np.uint32)
-    hand_contact_values = np.array([], dtype=np.uint8)
-
     is_valid = True
 
     for frame in range(T):
         contacts_obj_frame = contacts_obj[frame]
-        contacts_hand_frame = contacts_rh[frame]
-
         no_obj_contact = np.all((contacts_obj_frame == 0))
-        no_hand_contact = np.all((contacts_hand_frame == 0))
 
-        if not no_obj_contact and not no_hand_contact:
+        # if not no_obj_contact and not no_hand_contact:
+        if not no_obj_contact:
             contact_frames = np.append(contact_frames, np.array([frame], dtype=np.uint16))
 
             object_contact_frame_vertex_locations =  np.array(np.where(contacts_obj_frame != 0)[0], dtype=np.uint32)
             object_contact_frame_vertex_values = np.array(contacts_obj_frame[object_contact_frame_vertex_locations],  dtype=np.uint8)
 
-            hand_contact_frame_vertex_locations =  np.array(np.where(contacts_hand_frame != 0)[0], dtype=np.uint32)
-            hand_contact_frame_vertex_values = np.array(contacts_hand_frame[hand_contact_frame_vertex_locations],  dtype=np.uint8)
-
             object_contact_frame_counts = np.append(object_contact_frame_counts, np.array([len(object_contact_frame_vertex_locations)], dtype=np.uint16))
             object_contact_locations = np.append(object_contact_locations, object_contact_frame_vertex_locations)
             object_contact_values = np.append(object_contact_values, object_contact_frame_vertex_values)
-
-            hand_contact_frame_counts = np.append(hand_contact_frame_counts, np.array([len(hand_contact_frame_vertex_locations)], dtype=np.uint16))
-            hand_contact_locations = np.append(hand_contact_locations, hand_contact_frame_vertex_locations)
-            hand_contact_values = np.append(hand_contact_values, hand_contact_frame_vertex_values)
-
-        elif not no_obj_contact:
-            print("Discrepency: Found object contact but no hand contact")
-            is_valid = False
-
-        elif not no_hand_contact:
-            print("Discrepency: Found hand contact but no object contact")
-            is_valid = False
 
     if is_valid:
         dumpMotion = {
@@ -215,13 +189,10 @@ def export_sequence(cfg, logger=None):
             'contactFrames': contact_frames.flatten(),
             'objectContactFrameCounts': object_contact_frame_counts.flatten(),
             'objectContactLocations': object_contact_locations.flatten(),
-            'objectContactValues': object_contact_values.flatten(),
-            'handContactFrameCounts': hand_contact_frame_counts.flatten(),
-            'handContactLocations': hand_contact_locations.flatten(),
-            'handContactValues': hand_contact_values.flatten()
+            'objectContactValues': object_contact_values.flatten()
         }
 
-        np.savez_compressed(outfnamemotion, **dumpMotion)
+        np.savez(outfnamemotion, **dumpMotion)
         print("Export Completed Successfully")
     else:
         print("Sequence is invalid - failed to export")
@@ -261,8 +232,6 @@ if __name__ == '__main__':
     if out_path is None:
         out_path = grab_path
 
-    rhand_smplx_correspondence_fn = os.path.join(grab_path, '..', 'tools', 'smplx_correspondence', 'rhand_smplx_ids.npy')
-
     cfg = {
         # number of vertices samples for each object
         'n_verts_sample': 1024,
@@ -275,10 +244,7 @@ if __name__ == '__main__':
         'model_path':model_path,
 
         # sequence path
-        'motion_path':motion_path,
-
-        # MANO-SMPLX correspondence
-        'mano_correspondence': rhand_smplx_correspondence_fn
+        'motion_path':motion_path
     }
 
     log_dir = os.path.join(out_path, 'grab_processing.log')
