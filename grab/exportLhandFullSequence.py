@@ -154,7 +154,6 @@ def export_sequence(cfg, logger=None):
 
     object_contact_frame_counts = np.array([], dtype=np.uint16)
     object_contact_locations = np.array([], dtype=np.uint32)
-    object_contact_values = np.array([], dtype=np.uint8)
 
     is_valid = True
 
@@ -171,7 +170,6 @@ def export_sequence(cfg, logger=None):
 
             object_contact_frame_counts = np.append(object_contact_frame_counts, np.array([len(object_contact_frame_vertex_locations)], dtype=np.uint16))
             object_contact_locations = np.append(object_contact_locations, object_contact_frame_vertex_locations)
-            object_contact_values = np.append(object_contact_values, object_contact_frame_vertex_values)
 
     if is_valid:
         dumpMotion = {
@@ -188,8 +186,7 @@ def export_sequence(cfg, logger=None):
             'tableTranslations': trans_table.flatten(),
             'contactFrames': contact_frames.flatten(),
             'objectContactFrameCounts': object_contact_frame_counts.flatten(),
-            'objectContactLocations': object_contact_locations.flatten(),
-            'objectContactValues': object_contact_values.flatten()
+            'objectContactLocations': object_contact_locations.flatten()
         }
 
         np.savez(outfnamemotion, **dumpMotion)
