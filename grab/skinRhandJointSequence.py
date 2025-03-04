@@ -28,7 +28,7 @@ def skin_sequence(cfg, logger=None):
     logger('Starting skinning...')
     
     motion_path = cfg.motion_path
-    outfname = os.path.join(out_path, motion_path.split("/")[-1].split(".")[0] + 'Skinned.json')
+    outfname = os.path.join(out_path, motion_path.split("/")[-1].split(".")[0] + 'Skinned.hkmexp')
     
     with open(motion_path) as f:
         motion_data = json.load(f)
