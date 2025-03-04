@@ -53,6 +53,7 @@ def skin_sequence(cfg, logger=None):
     rhand_params = {
         'global_orient': global_orient_data,
         'transl': transl_data,
+        'hand_pose': fullpose_data,
         'fullpose': fullpose_data
     }
     
@@ -65,6 +66,7 @@ def skin_sequence(cfg, logger=None):
                 is_rhand = False,
                 v_template = rh_vtemp,
                 flat_hand_mean=True,
+                use_pca=False,
                 batch_size=T)
     
     torch_rh_params = params2torch(rhand_params)
