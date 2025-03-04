@@ -87,7 +87,7 @@ def skin_sequence(cfg, logger=None):
     skinDump = {
         'handSuffixName': motion_data["handSuffixName"],
         'totalFrames': T,
-        'handVertices': data_entries
+        'data': data_entries
     }
     
     with open(outfname, "w") as f:
